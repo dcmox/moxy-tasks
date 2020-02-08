@@ -32,7 +32,6 @@ var MoxyTaskScheduler = /** @class */ (function () {
         return true;
     };
     MoxyTaskScheduler.prototype.stop = function () {
-        console.log('Stopping...');
         this._workers.forEach(function (task) {
             if (task.workerTask) {
                 task.workerTask.terminate();

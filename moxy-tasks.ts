@@ -54,7 +54,6 @@ export class MoxyTaskScheduler {
     }
 
     public stop(): boolean {
-        console.log('Stopping...')
         this._workers.forEach((task: IMoxyTask) => {
             if (task.workerTask) { task.workerTask.terminate() }
         })
