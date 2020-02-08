@@ -1,6 +1,6 @@
 {
   "name": "@dcmox/moxy-tasks",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": false,
   "description": "Task Scheduler",
   "main": "moxy-tasks.js",
