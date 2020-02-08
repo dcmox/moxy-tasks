@@ -1,5 +1,5 @@
 # Moxy Task Scheduler
-MoxyTaskScheduler is a task/job scheduler class. Define a set of tasks (Functions or Web Workers) with scheduled times, pass them into MoxyTaskScheduler, and it do its job.
+MoxyTaskScheduler is a task/job scheduler class. Define a set of tasks (Functions or Web Workers) with scheduled times, pass them into MoxyTaskScheduler, and let it do its job.
 
 ## Class Methods
 * start() - Starts the task scheduler
