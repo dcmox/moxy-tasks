@@ -87,6 +87,3 @@ const jobs = [
 const scheduler = new MoxyTaskScheduler(jobs)
 scheduler.start() // Starts all jobs
 ```
-
-## TODO
-* Support storing tasks to a file or 
