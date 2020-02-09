@@ -86,18 +86,11 @@ var MoxyTaskScheduler = /** @class */ (function () {
         var task = this._tasks.find(function (task) { return task._id === labelOrId || task.label === labelOrId; });
         if (task) {
             if (date) {
-                var d = task.schedule.find(function (d) { return d === date; });
-                if (d) {
-                    d = undefined;
-                }
-                else {
-                    return false;
-                }
-                task.schedule = task.schedule.filter(function (d) { return d; });
+                var d_1 = task.schedule.findIndex(function (d) { return d === date; });
+                task.schedule = task.schedule.filter(function (date, index) { return index !== d_1; });
             }
             else {
-                task = undefined;
-                this._tasks = this._tasks.filter(function (t) { return t; });
+                this._tasks = this._tasks.filter(function (t) { return t._id !== task._id; });
             }
             return true;
         }
@@ -162,8 +155,8 @@ var MoxyTaskScheduler = /** @class */ (function () {
                                     : job.cron.units === 'weeks'
                                         ? (job.cron.interval * 1000 * 60 * 60 * 24 * 7)
                                         : (job.cron.interval * 1000); // default to seconds
-                    var d_1 = new Date(time);
-                    job.schedule.push(d_1); // Ensures cron runs indefinitely
+                    var d_2 = new Date(time);
+                    job.schedule.push(d_2); // Ensures cron runs indefinitely
                 }
                 this_1._execute(job);
                 if (job && job.schedule.length === 0) {

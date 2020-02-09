@@ -95,15 +95,13 @@ export class MoxyTaskScheduler {
     }
 
     public remove(labelOrId: string, date?: Date): boolean {
-        let task = this._tasks.find((task: IMoxyTask) => task._id === labelOrId || task.label === labelOrId)
+        const task = this._tasks.find((task: IMoxyTask) => task._id === labelOrId || task.label === labelOrId)
         if (task) {
             if (date) {
-                let d = task.schedule.find((d: Date) => d === date)
-                if (d) { d = undefined } else { return false }
-                task.schedule = task.schedule.filter((d: any) => d)
+                const d = task.schedule.findIndex((d: Date) => d === date)
+                task.schedule = task.schedule.filter((date: any, index: number) => index !== d)
             } else {
-                task = undefined
-                this._tasks = this._tasks.filter((t: IMoxyTask) => t)
+                this._tasks = this._tasks.filter((t: IMoxyTask) => t._id !== task._id)
             }
             return true
         }
