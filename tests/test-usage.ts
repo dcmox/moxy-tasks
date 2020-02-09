@@ -37,7 +37,19 @@ const jobs = [
             console.log('init')
         },
     },
+    {
+        cron: {
+            interval: 1,
+            unit: 'seconds',
+        },
+        label: 'Cron Task',
+        priority: 1000,
+        task: () => {
+            console.log('I am a cron.')
+            return true
+        },
+    },
 ]
 
-const scheduler = new MoxyTaskScheduler(jobs)
+const scheduler = new MoxyTaskScheduler(jobs, { defaultTime: 0, idleCooldown: 500 })
 scheduler.start()

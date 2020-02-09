@@ -36,6 +36,18 @@ var jobs = [
             console.log('init');
         }
     },
+    {
+        cron: {
+            interval: 1,
+            unit: 'seconds'
+        },
+        label: 'Cron Task',
+        priority: 1000,
+        task: function () {
+            console.log('I am a cron.');
+            return true;
+        }
+    },
 ];
-var scheduler = new moxy_tasks_1.MoxyTaskScheduler(jobs);
+var scheduler = new moxy_tasks_1.MoxyTaskScheduler(jobs, { defaultTime: 0, idleCooldown: 500 });
 scheduler.start();

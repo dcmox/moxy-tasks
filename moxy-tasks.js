@@ -18,17 +18,19 @@ var MoxyTaskScheduler = /** @class */ (function () {
             taskLimit: 100,
             tasksPerIdle: 2
         };
-        if (tasks) {
-            tasks.forEach(function (task) { return _this.add(task); });
-        }
         if (opts) {
             this._opts = Object.assign(this._opts, opts);
+        }
+        if (tasks) {
+            tasks.forEach(function (task, index) {
+                return index === tasks.length ? _this.add(task, true) : _this.add(task);
+            });
         }
     }
     MoxyTaskScheduler.prototype.start = function () {
         var _this = this;
-        this._process();
-        this._masterThread = setInterval(function () { return _this._process(); }, this._opts.idleCooldown);
+        this._monitor();
+        this._masterThread = setInterval(function () { return _this._monitor(); }, this._opts.idleCooldown);
         return true;
     };
     MoxyTaskScheduler.prototype.stop = function () {
@@ -46,7 +48,8 @@ var MoxyTaskScheduler = /** @class */ (function () {
     MoxyTaskScheduler.prototype.getWorkers = function () {
         return this._workers;
     };
-    MoxyTaskScheduler.prototype.add = function (task) {
+    MoxyTaskScheduler.prototype.add = function (task, interrupt) {
+        if (interrupt === void 0) { interrupt = false; }
         if (!task.created) {
             task.created = new Date();
         }
@@ -74,7 +77,9 @@ var MoxyTaskScheduler = /** @class */ (function () {
             this.sortSchedule(task);
         }
         this._tasks[this._tasks.length] = task;
-        this.sort();
+        if (interrupt) {
+            this.sort();
+        }
         return true;
     };
     MoxyTaskScheduler.prototype.remove = function (labelOrId, date) {
@@ -98,6 +103,10 @@ var MoxyTaskScheduler = /** @class */ (function () {
         }
         return false;
     };
+    MoxyTaskScheduler.prototype.rewind = function () {
+        this._queuePointer = 0;
+        return true;
+    };
     MoxyTaskScheduler.prototype.next = function () {
         this._queuePointer++;
         if (this._queuePointer > this._tasks.length - 1) {
@@ -117,6 +126,7 @@ var MoxyTaskScheduler = /** @class */ (function () {
     };
     MoxyTaskScheduler.prototype.sort = function () {
         this._tasks.sort(function (a, b) { return (a.priority || 0) > (b.priority || 0) ? -1 : 1; });
+        this.rewind();
         return true;
     };
     MoxyTaskScheduler.prototype.sortSchedule = function (task) {
@@ -127,7 +137,7 @@ var MoxyTaskScheduler = /** @class */ (function () {
     MoxyTaskScheduler.prototype.errorLogs = function () {
         return this._errors;
     };
-    MoxyTaskScheduler.prototype._process = function () {
+    MoxyTaskScheduler.prototype._monitor = function () {
         var d = new Date().valueOf();
         if (!this._tasks || this._tasks.length === 0) {
             if (this._opts.stopAfterEmptyQueue) {
@@ -136,58 +146,28 @@ var MoxyTaskScheduler = /** @class */ (function () {
             return false;
         }
         var _loop_1 = function (i) {
-            if (d > this_1._tasks[this_1._queuePointer].schedule[0].valueOf()) {
-                this_1._tasks[this_1._queuePointer].schedule.shift();
-                if (typeof this_1._tasks[this_1._queuePointer].task === 'function') {
-                    var retries_1 = 0;
-                    var job_1 = this_1._tasks[this_1._queuePointer];
-                    try {
-                        var ret = job_1.task();
-                        // Retry due to failure
-                        if (!ret && job_1.retryLimit) {
-                            var retryTimer_1 = setInterval(function () {
-                                var ret = job_1.task();
-                                retries_1++;
-                                if (ret || retries_1 >= job_1.retryLimit) {
-                                    clearInterval(retryTimer_1);
-                                }
-                            }, job_1.retryInterval);
-                        }
-                    }
-                    catch (e) {
-                        this_1._errors[this_1._errors.length] = {
-                            error: e,
-                            isWorker: false,
-                            jobId: job_1._id,
-                            label: job_1.label,
-                            timestamp: new Date()
-                        };
-                    }
+            var job = this_1._tasks[this_1._queuePointer];
+            if (d > job.schedule[0].valueOf()) {
+                var schedule = job.schedule.shift();
+                if (job.cron) {
+                    var time = schedule.valueOf();
+                    time += job.cron.units === 'seconds'
+                        ? (job.cron.interval * 1000)
+                        : job.cron.units === 'minutes'
+                            ? (job.cron.interval * 1000 * 60)
+                            : job.cron.units === 'hours'
+                                ? (job.cron.interval * 1000 * 60 * 60)
+                                : job.cron.units === 'days'
+                                    ? (job.cron.interval * 1000 * 60 * 60 * 24)
+                                    : job.cron.units === 'weeks'
+                                        ? (job.cron.interval * 1000 * 60 * 60 * 24 * 7)
+                                        : (job.cron.interval * 1000); // default to seconds
+                    var d_1 = new Date(time);
+                    job.schedule.push(d_1); // Ensures cron runs indefinitely
                 }
-                else {
-                    // Worker thread
-                    var job = this_1._tasks[this_1._queuePointer];
-                    this_1._workers[this_1._workers.length] = Object.assign({}, job);
-                    var instance = this_1._workers[this_1._workers.length - 1];
-                    try {
-                        instance.worker = new Worker(instance.task, instance.workerOpts);
-                        if (instance.workerInit) {
-                            instance.workerInit(instance.worker); // run initializer
-                        }
-                    }
-                    catch (e) {
-                        this_1._errors[this_1._errors.length] = {
-                            error: e,
-                            isWorker: true,
-                            jobId: instance._id,
-                            label: instance.label,
-                            timestamp: new Date()
-                        };
-                    }
-                }
-                if (this_1._tasks[this_1._queuePointer] && this_1._tasks[this_1._queuePointer].schedule.length === 0) {
-                    this_1._tasks[this_1._queuePointer] = undefined;
-                    this_1._tasks = this_1._tasks.filter(function (t) { return t; });
+                this_1._execute(job);
+                if (job && job.schedule.length === 0) {
+                    this_1._tasks = this_1._tasks.filter(function (task) { return task._id !== job._id; });
                 }
             }
             else {
@@ -203,6 +183,54 @@ var MoxyTaskScheduler = /** @class */ (function () {
             var state_1 = _loop_1(i);
             if (state_1 === "break")
                 break;
+        }
+        return true;
+    };
+    MoxyTaskScheduler.prototype._execute = function (job) {
+        if (typeof job.task === 'function') {
+            var retries_1 = 0;
+            try {
+                var ret = job.task();
+                // Retry due to failure
+                if (!ret && job.retryLimit) {
+                    var retryTimer_1 = setInterval(function () {
+                        var ret = job.task();
+                        retries_1++;
+                        if (ret || retries_1 >= (job.retryLimit || 0)) {
+                            clearInterval(retryTimer_1);
+                        }
+                    }, job.retryInterval);
+                }
+            }
+            catch (e) {
+                this._errors[this._errors.length] = {
+                    error: e,
+                    isWorker: false,
+                    jobId: job._id,
+                    label: job.label,
+                    timestamp: new Date()
+                };
+            }
+        }
+        else {
+            // Worker thread
+            this._workers[this._workers.length] = Object.assign({}, job);
+            var instance = this._workers[this._workers.length - 1];
+            try {
+                instance.worker = new Worker(instance.task, instance.workerOpts);
+                if (instance.workerInit) {
+                    instance.workerInit(instance.worker); // run initializer
+                }
+            }
+            catch (e) {
+                this._errors[this._errors.length] = {
+                    error: e,
+                    isWorker: true,
+                    jobId: instance._id,
+                    label: instance.label,
+                    timestamp: new Date()
+                };
+            }
         }
         return true;
     };

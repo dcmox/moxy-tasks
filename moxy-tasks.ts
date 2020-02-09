@@ -9,10 +9,16 @@ interface IMoxyTask {
     retryLimit?: number,
     retryInterval?: number,
     schedule?: Date[],
+    cron?: IMoxyCronOptions,
     task: (() => boolean) | string, // Worker path
     workerInit?: (worker: Worker) => any,
     workerTask?: any, // Should not be initialized
     workerOpts?: any
+}
+
+interface IMoxyCronOptions {
+    unit?: string, //"seconds" | "minutes" | "hours" | "days" | "weeks"
+    interval: number
 }
 
 interface IMoxyTaskSchedulerOptions {
@@ -39,17 +45,14 @@ export class MoxyTaskScheduler {
     }
 
     constructor(tasks?: IMoxyTask[], opts?: IMoxyTaskSchedulerOptions) {
-        if (tasks) {
-            tasks.forEach((task: IMoxyTask) => this.add(task))
-        }
-        if (opts) {
-            this._opts = Object.assign(this._opts, opts)
-        }
+        if (opts) { this._opts = Object.assign(this._opts, opts) }
+        if (tasks) { tasks.forEach((task: IMoxyTask, index: number) =>
+            index === tasks.length ? this.add(task, true) : this.add(task)) }
     }
 
     public start(): boolean {
-        this._process()
-        this._masterThread = setInterval(() => this._process(), this._opts.idleCooldown)
+        this._monitor()
+        this._masterThread = setInterval(() => this._monitor(), this._opts.idleCooldown)
         return true
     }
 
@@ -69,7 +72,7 @@ export class MoxyTaskScheduler {
         return this._workers
     }
 
-    public add(task: IMoxyTask): boolean {
+    public add(task: IMoxyTask, interrupt: boolean = false): boolean {
         if (!task.created) { task.created = new Date() }
         if (!task._id) { task._id = _f.uniqueId() }
 
@@ -87,7 +90,7 @@ export class MoxyTaskScheduler {
             this.sortSchedule(task)
         }
         this._tasks[this._tasks.length] = task
-        this.sort()
+        if (interrupt) { this.sort() }
         return true
     }
 
@@ -105,6 +108,11 @@ export class MoxyTaskScheduler {
             return true
         }
         return false
+    }
+
+    public rewind(): boolean {
+        this._queuePointer = 0
+        return true
     }
 
     public next(): boolean {
@@ -128,6 +136,7 @@ export class MoxyTaskScheduler {
 
     public sort(): boolean {
         this._tasks.sort((a: IMoxyTask, b: IMoxyTask) => (a.priority || 0) > (b.priority || 0) ? -1 : 1)
+        this.rewind()
         return true
     }
 
@@ -140,7 +149,7 @@ export class MoxyTaskScheduler {
         return this._errors
     }
 
-    private _process(): boolean {
+    private _monitor(): boolean {
         const d = new Date().valueOf()
         if (!this._tasks || this._tasks.length === 0) {
              if (this._opts.stopAfterEmptyQueue) { this.stop() }
@@ -148,61 +157,80 @@ export class MoxyTaskScheduler {
         }
 
         for (let i = 0; i < (this._opts.tasksPerIdle || 2); i++) {
-            if (d > this._tasks[this._queuePointer].schedule[0].valueOf()) {
-                this._tasks[this._queuePointer].schedule.shift()
-                if (typeof this._tasks[this._queuePointer].task === 'function') {
-                    let retries: number = 0
-                    const job = this._tasks[this._queuePointer]
-                    try {
-                        const ret = (job.task as () => boolean)()
-                        // Retry due to failure
-                        if (!ret && job.retryLimit) {
-                            const retryTimer = setInterval(() => {
-                                const ret = (job.task as () => boolean)()
-                                retries++
-                                if (ret || retries >= job.retryLimit) {
-                                    clearInterval(retryTimer)
-                                }
-                            }, job.retryInterval)
-                        }
-                    } catch (e) {
-                        this._errors[this._errors.length] = {
-                            error: e,
-                            isWorker: false,
-                            jobId: job._id,
-                            label: job.label,
-                            timestamp: new Date(),
-                        }
-                    }
-                } else {
-                    // Worker thread
-                    const job = this._tasks[this._queuePointer]
-                    this._workers[this._workers.length] = Object.assign({}, job)
-                    const instance = this._workers[this._workers.length - 1]
-                    try {
-                        instance.worker = new Worker(instance.task, instance.workerOpts)
-                        if (instance.workerInit) {
-                            instance.workerInit(instance.worker) // run initializer
-                        }
-                    } catch (e) {
-                        this._errors[this._errors.length] = {
-                            error: e,
-                            isWorker: true,
-                            jobId: instance._id,
-                            label: instance.label,
-                            timestamp: new Date(),
-                        }
-                    }
+            const job = this._tasks[this._queuePointer]
+            if (d > job.schedule[0].valueOf()) {
+                const schedule = job.schedule.shift()
+                if (job.cron) {
+                    let time: number = schedule.valueOf()
+                    time += job.cron.units === 'seconds'
+                        ? (job.cron.interval * 1000)
+                        : job.cron.units === 'minutes'
+                        ? (job.cron.interval * 1000 * 60)
+                        : job.cron.units === 'hours'
+                        ? (job.cron.interval * 1000 * 60 * 60)
+                        : job.cron.units === 'days'
+                        ? (job.cron.interval * 1000 * 60 * 60 * 24)
+                        : job.cron.units === 'weeks'
+                        ? (job.cron.interval * 1000 * 60 * 60 * 24 * 7)
+                        : (job.cron.interval * 1000) // default to seconds
+                    const d: Date = new Date(time)
+                    job.schedule.push(d) // Ensures cron runs indefinitely
                 }
-                if (this._tasks[this._queuePointer] && this._tasks[this._queuePointer].schedule.length === 0) {
-                    this._tasks[this._queuePointer] = undefined
-                    this._tasks = this._tasks.filter((t: IMoxyTask) => t)
+                this._execute(job)
+                if (job && job.schedule.length === 0) {
+                    this._tasks = this._tasks.filter((task: IMoxyTask) => task._id !== job._id)
                 }
             } else {
                 // Waiting
             }
             this.next()
             if (!this._tasks[this._queuePointer]) { break }
+        }
+        return true
+    }
+
+    private _execute(job: IMoxyTask): boolean {
+        if (typeof job.task === 'function') {
+            let retries: number = 0
+            try {
+                const ret = (job.task as () => boolean)()
+                // Retry due to failure
+                if (!ret && job.retryLimit) {
+                    const retryTimer = setInterval(() => {
+                        const ret = (job.task as () => boolean)()
+                        retries++
+                        if (ret || retries >= (job.retryLimit || 0)) {
+                            clearInterval(retryTimer)
+                        }
+                    }, job.retryInterval)
+                }
+            } catch (e) {
+                this._errors[this._errors.length] = {
+                    error: e,
+                    isWorker: false,
+                    jobId: job._id,
+                    label: job.label,
+                    timestamp: new Date(),
+                }
+            }
+        } else {
+            // Worker thread
+            this._workers[this._workers.length] = Object.assign({}, job)
+            const instance = this._workers[this._workers.length - 1]
+            try {
+                instance.worker = new Worker(instance.task, instance.workerOpts)
+                if (instance.workerInit) {
+                    instance.workerInit(instance.worker) // run initializer
+                }
+            } catch (e) {
+                this._errors[this._errors.length] = {
+                    error: e,
+                    isWorker: true,
+                    jobId: instance._id,
+                    label: instance.label,
+                    timestamp: new Date(),
+                }
+            }
         }
         return true
     }
