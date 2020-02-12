@@ -1,6 +1,4 @@
-"use strict";
-exports.__esModule = true;
-var moxy_tasks_1 = require("../moxy-tasks");
+var taskScheduler = require('../moxy-tasks');
 var d = new Date();
 d.setMinutes(d.getMinutes() + 1);
 var ds = new Date();
@@ -49,5 +47,8 @@ var jobs = [
         }
     },
 ];
-var scheduler = new moxy_tasks_1.MoxyTaskScheduler(jobs, { defaultTime: 0, idleCooldown: 500 });
+var scheduler = new taskScheduler(jobs, {
+    defaultTime: 0,
+    idleCooldown: 500
+});
 scheduler.start();

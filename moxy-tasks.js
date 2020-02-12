@@ -1,7 +1,5 @@
-"use strict";
-exports.__esModule = true;
-var _f = require('underscore-functions')._f;
-var _a = require('worker_threads'), Worker = _a.Worker, isMainThread = _a.isMainThread, parentPort = _a.parentPort, workerData = _a.workerData;
+var _f = require('underscore-functions');
+var _a = require('worker_threads'), isMainThread = _a.isMainThread, parentPort = _a.parentPort, workerData = _a.workerData;
 var MoxyTaskScheduler = /** @class */ (function () {
     function MoxyTaskScheduler(tasks, opts) {
         var _this = this;
@@ -83,7 +81,9 @@ var MoxyTaskScheduler = /** @class */ (function () {
         return true;
     };
     MoxyTaskScheduler.prototype.remove = function (labelOrId, date) {
-        var task = this._tasks.find(function (task) { return task._id === labelOrId || task.label === labelOrId; });
+        var task = this._tasks.find(function (task) {
+            return task._id === labelOrId || task.label === labelOrId;
+        });
         if (task) {
             if (date) {
                 var d_1 = task.schedule.findIndex(function (d) { return d === date; });
@@ -118,13 +118,17 @@ var MoxyTaskScheduler = /** @class */ (function () {
         return this._tasks[this._queuePointer + 1] || this._tasks[0];
     };
     MoxyTaskScheduler.prototype.sort = function () {
-        this._tasks.sort(function (a, b) { return (a.priority || 0) > (b.priority || 0) ? -1 : 1; });
+        this._tasks.sort(function (a, b) {
+            return (a.priority || 0) > (b.priority || 0) ? -1 : 1;
+        });
         this.rewind();
         return true;
     };
     MoxyTaskScheduler.prototype.sortSchedule = function (task) {
         var _a;
-        (_a = task.schedule) === null || _a === void 0 ? void 0 : _a.sort(function (a, b) { return a.valueOf() < b.valueOf() ? -1 : 1; });
+        (_a = task.schedule) === null || _a === void 0 ? void 0 : _a.sort(function (a, b) {
+            return a.valueOf() < b.valueOf() ? -1 : 1;
+        });
         return true;
     };
     MoxyTaskScheduler.prototype.errorLogs = function () {
@@ -144,17 +148,18 @@ var MoxyTaskScheduler = /** @class */ (function () {
                 var schedule = job.schedule.shift();
                 if (job.cron) {
                     var time = schedule.valueOf();
-                    time += job.cron.units === 'seconds'
-                        ? (job.cron.interval * 1000)
-                        : job.cron.units === 'minutes'
-                            ? (job.cron.interval * 1000 * 60)
-                            : job.cron.units === 'hours'
-                                ? (job.cron.interval * 1000 * 60 * 60)
-                                : job.cron.units === 'days'
-                                    ? (job.cron.interval * 1000 * 60 * 60 * 24)
-                                    : job.cron.units === 'weeks'
-                                        ? (job.cron.interval * 1000 * 60 * 60 * 24 * 7)
-                                        : (job.cron.interval * 1000); // default to seconds
+                    time +=
+                        job.cron.units === 'seconds'
+                            ? job.cron.interval * 1000
+                            : job.cron.units === 'minutes'
+                                ? job.cron.interval * 1000 * 60
+                                : job.cron.units === 'hours'
+                                    ? job.cron.interval * 1000 * 60 * 60
+                                    : job.cron.units === 'days'
+                                        ? job.cron.interval * 1000 * 60 * 60 * 24
+                                        : job.cron.units === 'weeks'
+                                            ? job.cron.interval * 1000 * 60 * 60 * 24 * 7
+                                            : job.cron.interval * 1000; // default to seconds
                     var d_2 = new Date(time);
                     job.schedule.push(d_2); // Ensures cron runs indefinitely
                 }
@@ -229,4 +234,4 @@ var MoxyTaskScheduler = /** @class */ (function () {
     };
     return MoxyTaskScheduler;
 }());
-exports.MoxyTaskScheduler = MoxyTaskScheduler;
+module.exports = MoxyTaskScheduler;
